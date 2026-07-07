@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ListingList from "@/components/ListingList";
 import PropertyDetail from "@/components/PropertyDetail";
 import QAPanel, { type QAStatus } from "@/components/QAPanel";
@@ -8,6 +8,7 @@ import { properties, getPropertyById } from "@/lib/properties";
 import type { Property } from "@/types/property";
 
 const MAX_QUESTION_LENGTH = 500;
+const PAGE_SIZE = 8;
 
 export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -19,6 +20,29 @@ export default function Home() {
   // Guards against a slow response landing after the user switched properties.
   const requestRef = useRef(0);
 
+  // Right-column scroll container (desktop); reset to top on new selection.
+  const detailScrollRef = useRef<HTMLElement>(null);
+
+  // Infinite scroll: reveal the catalogue a page at a time.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+
+  const visibleProperties = properties.slice(0, visibleCount);
+  const hasMore = visibleCount < properties.length;
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    // Simulated latency — the Stage 2 seam for a real paginated request.
+    window.setTimeout(() => {
+      setVisibleCount((count) => Math.min(count + PAGE_SIZE, properties.length));
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
+    }, 350);
+  }, []);
+
   const selected = selectedId ? getPropertyById(selectedId) : undefined;
 
   // Every property gets its own fresh conversation.
@@ -28,6 +52,7 @@ export default function Home() {
     setStatus("idle");
     setAnswer("");
     setErrorMessage("");
+    if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
   }, [selectedId]);
 
   async function ask() {
@@ -94,14 +119,17 @@ export default function Home() {
       <main className="layout">
         <div className="layout__list">
           <ListingList
-            properties={properties}
+            properties={visibleProperties}
             selectedId={selectedId}
             onSelect={setSelectedId}
             expandedContent={detailPane}
+            hasMore={hasMore}
+            isLoadingMore={loadingMore}
+            onLoadMore={loadMore}
           />
         </div>
 
-        <aside className="layout__detail" aria-live="polite">
+        <aside className="layout__detail" aria-live="polite" ref={detailScrollRef}>
           {selected ? (
             detailPane
           ) : (

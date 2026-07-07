@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, type ReactNode } from "react";
 import type { Property } from "@/types/property";
 import { formatPrice } from "@/lib/format";
 
@@ -12,6 +14,12 @@ interface ListingListProps {
    * in a dedicated right column instead.
    */
   expandedContent?: ReactNode;
+  /** Whether more listings remain beyond the ones passed in `properties`. */
+  hasMore: boolean;
+  /** True while the next page is being fetched. */
+  isLoadingMore: boolean;
+  /** Request the next page. Called on scroll and on the fallback button. */
+  onLoadMore: () => void;
 }
 
 export default function ListingList({
@@ -19,7 +27,30 @@ export default function ListingList({
   selectedId,
   onSelect,
   expandedContent,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }: ListingListProps) {
+  const sentinelRef = useRef<HTMLLIElement | null>(null);
+
+  // Auto-load the next page when the sentinel scrolls into view. The button
+  // below is the keyboard-accessible fallback and the no-observer path.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
   return (
     <ul className="listing-list" aria-label="Property listings">
       {properties.map((property) => {
@@ -59,6 +90,21 @@ export default function ListingList({
           </li>
         );
       })}
+
+      <li className="listing-sentinel" ref={sentinelRef}>
+        {isLoadingMore ? (
+          <p className="listing-status" role="status">
+            <span className="listing-spinner" aria-hidden="true" />
+            Loading more listings…
+          </p>
+        ) : hasMore ? (
+          <button type="button" className="load-more" onClick={onLoadMore}>
+            Load more listings
+          </button>
+        ) : (
+          <p className="listing-end">You’ve reached the end · {properties.length} listings</p>
+        )}
+      </li>
     </ul>
   );
 }

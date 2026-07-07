@@ -16,6 +16,7 @@ export default function Home() {
   const [status, setStatus] = useState<QAStatus>("idle");
   const [answer, setAnswer] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [query, setQuery] = useState("");
 
   // Guards against a slow response landing after the user switched properties.
   const requestRef = useRef(0);
@@ -23,13 +24,26 @@ export default function Home() {
   // Right-column scroll container (desktop); reset to top on new selection.
   const detailScrollRef = useRef<HTMLElement>(null);
 
+  // Left-column scroll container; reset to top when the search query changes.
+  const listScrollRef = useRef<HTMLDivElement>(null);
+
   // Infinite scroll: reveal the catalogue a page at a time.
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
 
-  const visibleProperties = properties.slice(0, visibleCount);
-  const hasMore = visibleCount < properties.length;
+  // Filter by title or district (case-insensitive); pagination runs on the result.
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredProperties = normalizedQuery
+    ? properties.filter(
+        (property) =>
+          property.title.toLowerCase().includes(normalizedQuery) ||
+          property.location.toLowerCase().includes(normalizedQuery),
+      )
+    : properties;
+
+  const visibleProperties = filteredProperties.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProperties.length;
 
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current) return;
@@ -37,7 +51,7 @@ export default function Home() {
     setLoadingMore(true);
     // Simulated latency — the Stage 2 seam for a real paginated request.
     window.setTimeout(() => {
-      setVisibleCount((count) => Math.min(count + PAGE_SIZE, properties.length));
+      setVisibleCount((count) => count + PAGE_SIZE);
       setLoadingMore(false);
       loadingMoreRef.current = false;
     }, 350);
@@ -54,6 +68,12 @@ export default function Home() {
     setErrorMessage("");
     if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
   }, [selectedId]);
+
+  // Restart pagination and scroll back to the top when the query changes.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+    if (listScrollRef.current) listScrollRef.current.scrollTop = 0;
+  }, [normalizedQuery]);
 
   async function ask() {
     const propertyId = selectedId;
@@ -118,15 +138,66 @@ export default function Home() {
 
       <main className="layout">
         <div className="layout__list">
-          <ListingList
-            properties={visibleProperties}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            expandedContent={detailPane}
-            hasMore={hasMore}
-            isLoadingMore={loadingMore}
-            onLoadMore={loadMore}
-          />
+          <div className="list-search">
+            <div className="list-search__field">
+              <svg
+                className="list-search__icon"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <circle cx="9" cy="9" r="6" />
+                <line x1="13.5" y1="13.5" x2="18" y2="18" strokeLinecap="round" />
+              </svg>
+              <input
+                type="search"
+                className="list-search__input"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search by title or district"
+                aria-label="Search listings by title or district"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  className="list-search__clear"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+            {normalizedQuery ? (
+              <p className="list-search__count" role="status">
+                {filteredProperties.length}{" "}
+                {filteredProperties.length === 1 ? "result" : "results"}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="list-scroll" ref={listScrollRef}>
+            {filteredProperties.length === 0 ? (
+              <div className="list-empty">
+                <p className="list-empty__title">No matching listings</p>
+                <p className="list-empty__text">
+                  Nothing matches “{query.trim()}”. Try a different title or district.
+                </p>
+              </div>
+            ) : (
+              <ListingList
+                properties={visibleProperties}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                expandedContent={detailPane}
+                hasMore={hasMore}
+                isLoadingMore={loadingMore}
+                onLoadMore={loadMore}
+              />
+            )}
+          </div>
         </div>
 
         <aside className="layout__detail" aria-live="polite" ref={detailScrollRef}>

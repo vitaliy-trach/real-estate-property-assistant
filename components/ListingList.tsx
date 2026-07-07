@@ -102,7 +102,10 @@ export default function ListingList({
             Load more listings
           </button>
         ) : (
-          <p className="listing-end">You’ve reached the end · {properties.length} listings</p>
+          <p className="listing-end">
+            You’ve reached the end · {properties.length}{" "}
+            {properties.length === 1 ? "listing" : "listings"}
+          </p>
         )}
       </li>
     </ul>
